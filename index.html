@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kelimelik Asistan</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top solver-head">
+      <h1>Kelimelik Asistan</h1>
+      <p class="sub">Telefondaki oyunu buraya işleyin; en iyi hamleleri tahtada gösterir.</p>
+    </header>
+
+    <p class="hint" id="dictHint">Sözlük yükleniyor…</p>
+
+    <div class="solver-grid">
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Tahta"></div>
+        <p class="fine-print">Kareye tıklayın; harfi klavyeden veya alttaki harf düğmelerinden girin. Sil: boş harf.</p>
+        <div class="cell-toolbar">
+          <span id="selLabel" class="sel-label">Kare seçin</span>
+          <input type="text" id="cellInput" maxlength="2" autocomplete="off" placeholder="Harf" />
+          <button type="button" id="btnClearCell">Kareyi sil</button>
+          <button type="button" id="btnMarkStar">★/★★★ ekle</button>
+        </div>
+      </div>
+
+      <section class="panel solver-panel">
+        <label>
+          Elindeki harfler (en fazla 7, joker için ?)
+          <input type="text" id="rackInput" placeholder="Örn: KELİM??" autocomplete="off" />
+        </label>
+        <div class="rack-area" aria-label="Harf rafı">
+          <div class="rack-title">Harfleri sürükleyip tahtaya bırakın</div>
+          <div id="rackTiles" class="rack-tiles" role="list"></div>
+          <div class="rack-actions">
+            <button type="button" id="btnClearRack">Raftaki harfleri temizle</button>
+          </div>
+        </div>
+        <div class="bank-area" aria-label="Harf paleti">
+          <div class="rack-title">Alternatif: alfabeden harf sürükle (raf girmeden)</div>
+          <div id="letterBank" class="letter-bank" role="list"></div>
+        </div>
+
+        <div class="controls">
+          <button type="button" id="btnSolve">Olası hamleleri bul</button>
+          <button type="button" id="btnClearBoard">Tahtayı temizle</button>
+        </div>
+
+        <p class="msg" id="message" role="status"></p>
+
+        <div class="moves-wrap">
+          <h2>Öneriler (tıklayınca tahtada yeşil)</h2>
+          <div class="controls" style="justify-content:flex-start">
+            <button type="button" id="btnConfirmMove" disabled>Seçili öneriyi onayla</button>
+            <button type="button" id="btnClearPreview" disabled>Önizlemeyi temizle</button>
+          </div>
+          <div id="movesList"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="solver_rules.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

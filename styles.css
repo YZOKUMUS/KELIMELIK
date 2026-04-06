@@ -1,0 +1,180 @@
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.solver-grid {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.solver-panel {
+  width: 340px;
+  text-align: left;
+}
+
+.solver-panel label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.solver-panel input,
+.solver-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px 10px;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 12px;
+}
+
+.controls button,
+.rack-actions button,
+.cell-toolbar button {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.board-wrap,
+#boardWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 20px auto;
+  min-width: 620px;
+  min-height: 620px;
+}
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(15, 40px);
+  grid-template-rows: repeat(15, 40px);
+  gap: 1px;
+}
+
+.cell {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #333;
+  background-color: #eee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cell:hover {
+  background-color: #ddd;
+}
+
+#picker {
+  margin-top: 20px;
+}
+
+.rack-area {
+  margin: 12px 0 18px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+  text-align: left;
+}
+
+.rack-title {
+  font-size: 13px;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+
+.rack-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.tile {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  cursor: grab;
+  user-select: none;
+}
+
+.tile:active {
+  cursor: grabbing;
+}
+
+.tile.blank {
+  background: #fff7d6;
+}
+
+.cell.drag-over {
+  outline: 2px solid #2f7dff;
+  outline-offset: -2px;
+}
+
+.cell.preview {
+  background-color: #d9f7d9;
+}
+
+.rack-actions {
+  margin-top: 10px;
+}
+
+.bank-area {
+  margin: 12px 0 18px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+  text-align: left;
+}
+
+.letter-bank {
+  display: grid;
+  grid-template-columns: repeat(7, 40px);
+  gap: 8px;
+}
+
+.place-word-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.mini {
+  font-size: 12px;
+}
+
+.mini input,
+.mini select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px 10px;
+}
