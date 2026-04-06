@@ -24,6 +24,10 @@
   const btnClearCell = document.getElementById('btnClearCell');
   const btnSolve = document.getElementById('btnSolve');
   const btnClearBoard = document.getElementById('btnClearBoard');
+  const btnUndo = document.getElementById('btnUndo');
+  const btnRedo = document.getElementById('btnRedo');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
   const movesList = document.getElementById('movesList');
   const messageEl = document.getElementById('message');
   const btnConfirmMove = document.getElementById('btnConfirmMove');
@@ -37,6 +41,11 @@
 
   let DICT_WORDS = null; // string[]
   let DICT_INDEX = null; // Map<char, number[]>
+  let DICT_SET = null; // Set<string>
+
+  const STORAGE_KEY = 'kelimelik-assistant-state-v1';
+  const undoStack = [];
+  const redoStack = [];
 
   if (dictHint) dictHint.textContent = 'Hazır.';
 
@@ -63,6 +72,73 @@
     if (btnClearPreview) btnClearPreview.disabled = true;
   }
 
+  function snapshotState() {
+    const board = [];
+    for (let r = 0; r < boardSize; r++) {
+      const row = [];
+      for (let c = 0; c < boardSize; c++) row.push(boardLetterAt(r, c) || '');
+      board.push(row);
+    }
+    return {
+      board,
+      rackText: rackInput ? rackInput.value || '' : '',
+      selected,
+      writeDir,
+    };
+  }
+
+  function applyState(state) {
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+        const ch = state?.board?.[r]?.[c] || '';
+        committed[r][c] = ch ? { letter: ch } : null;
+      }
+    }
+    clearPreview();
+    if (rackInput) rackInput.value = state?.rackText || '';
+    setRackFromInput();
+    selected = state?.selected && Number.isFinite(state.selected.r) && Number.isFinite(state.selected.c)
+      ? { r: state.selected.r, c: state.selected.c }
+      : { r: null, c: null };
+    writeDir = state?.writeDir === 'V' ? 'V' : 'H';
+    if (selLabel) {
+      selLabel.textContent =
+        selected.r != null && selected.c != null
+          ? `Seçili: ${selected.r},${selected.c} (${writeDir === 'H' ? '→' : '↓'})`
+          : 'Kare seçin';
+    }
+    renderBoard();
+  }
+
+  function updateUndoRedoUI() {
+    if (btnUndo) btnUndo.disabled = undoStack.length === 0;
+    if (btnRedo) btnRedo.disabled = redoStack.length === 0;
+  }
+
+  function pushUndo() {
+    undoStack.push(snapshotState());
+    if (undoStack.length > 50) undoStack.shift();
+    redoStack.length = 0;
+    updateUndoRedoUI();
+  }
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotState()));
+    } catch (_) {}
+  }
+
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      applyState(JSON.parse(raw));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function commitPreview() {
     let any = false;
     for (let r = 0; r < boardSize; r++) {
@@ -80,6 +156,7 @@
     if (btnConfirmMove) btnConfirmMove.disabled = true;
     if (btnClearPreview) btnClearPreview.disabled = true;
     renderBoard();
+    saveToStorage();
     return any;
   }
 
@@ -107,6 +184,11 @@
       }
     }
     return idx;
+  }
+
+  function buildDictSet(words) {
+    // Fast membership test for "is this word in dictionary?"
+    return new Set(words);
   }
 
   function ensureDictLoaderUI() {
@@ -142,6 +224,7 @@
         if (!Array.isArray(words)) throw new Error('Sözlük JSON array değil.');
         DICT_WORDS = words;
         DICT_INDEX = buildDictIndex(words);
+        DICT_SET = buildDictSet(words);
         if (dictHint) dictHint.textContent = `Sözlük hazır (${words.length.toLocaleString('tr-TR')} kelime).`;
       } catch (e) {
         console.error(e);
@@ -165,6 +248,7 @@
       if (!Array.isArray(words)) throw new Error('Sözlük JSON array değil.');
       DICT_WORDS = words;
       DICT_INDEX = buildDictIndex(words);
+      DICT_SET = buildDictSet(words);
       if (dictHint) dictHint.textContent = `Sözlük hazır (${words.length.toLocaleString('tr-TR')} kelime).`;
       return true;
     } catch (e) {
@@ -308,15 +392,19 @@
   function placeLetterDirect(r, c, ch) {
     const letter = String(ch).toUpperCase();
     if (!letter || letter.length !== 1) return;
+    pushUndo();
     committed[r][c] = { letter };
     preview[r][c] = null;
     renderBoard();
+    saveToStorage();
   }
 
   function clearCell(r, c) {
+    pushUndo();
     committed[r][c] = null;
     preview[r][c] = null;
     renderBoard();
+    saveToStorage();
   }
 
   function cleanTextForBoard(text) {
@@ -352,6 +440,8 @@
   setRackFromInput();
   renderLetterBank();
   loadDictionary();
+  loadFromStorage();
+  updateUndoRedoUI();
 
   // Klavye ile hızlı yazma: kare seç -> yaz -> Enter
   if (cellInput) {
@@ -379,12 +469,14 @@
 
   if (btnClearBoard) {
     btnClearBoard.addEventListener('click', () => {
+      pushUndo();
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) committed[r][c] = null;
       }
       renderBoard();
       setMessage('');
       if (movesList) movesList.innerHTML = '';
+      saveToStorage();
     });
   }
 
@@ -435,6 +527,76 @@
       return null;
     }
     return usedNew > 0 ? { usedNew } : null;
+  }
+
+  function dictHas(word) {
+    if (!DICT_SET) return false;
+    return DICT_SET.has(word);
+  }
+
+  function letterAtWithMove(r, c, move) {
+    const existing = boardLetterAt(r, c);
+    if (existing) return existing;
+    // check if this cell is covered by move
+    if (move.dir === 'H') {
+      if (r !== move.r) return '';
+      const i = c - move.c;
+      if (i < 0 || i >= move.word.length) return '';
+      return move.word[i];
+    }
+    // V
+    if (c !== move.c) return '';
+    const i = r - move.r;
+    if (i < 0 || i >= move.word.length) return '';
+    return move.word[i];
+  }
+
+  function buildWordAt(r, c, dir, move) {
+    // Build full word through (r,c) in direction dir, using existing+move letters.
+    const dr = dir === 'V' ? 1 : 0;
+    const dc = dir === 'H' ? 1 : 0;
+
+    let r0 = r;
+    let c0 = c;
+    while (true) {
+      const rr = r0 - dr;
+      const cc = c0 - dc;
+      if (rr < 0 || rr >= boardSize || cc < 0 || cc >= boardSize) break;
+      const ch = letterAtWithMove(rr, cc, move);
+      if (!ch) break;
+      r0 = rr;
+      c0 = cc;
+    }
+
+    let out = '';
+    let rr = r0;
+    let cc = c0;
+    while (rr >= 0 && rr < boardSize && cc >= 0 && cc < boardSize) {
+      const ch = letterAtWithMove(rr, cc, move);
+      if (!ch) break;
+      out += ch;
+      rr += dr;
+      cc += dc;
+    }
+    return out;
+  }
+
+  function isMoveDictionaryValid(move) {
+    // main word must be dictionary word (it is), but we also validate cross words created by new tiles
+    if (!dictHas(move.word)) return false;
+
+    for (let i = 0; i < move.word.length; i++) {
+      const r = move.r + (move.dir === 'V' ? i : 0);
+      const c = move.c + (move.dir === 'H' ? i : 0);
+      const existing = boardLetterAt(r, c);
+      if (existing) continue; // not a new tile => doesn't create a new cross word by itself
+
+      const crossDir = move.dir === 'H' ? 'V' : 'H';
+      const crossWord = buildWordAt(r, c, crossDir, move);
+      if (crossWord.length >= 2 && !dictHas(crossWord)) return false;
+    }
+
+    return true;
   }
 
   function hasNeighborLetter(r, c) {
@@ -524,7 +686,7 @@
               const key = `H:${r0}:${c0}:${w}`;
               if (!seen.has(key) && !blockedBySideLetters(w, r0, c0, 'H') && wordHasConnection(w, r0, c0, 'H')) {
                 const ok = canConsumeRackForWord(w, r0, c0, 'H', rackCounts);
-                if (ok) {
+                if (ok && isMoveDictionaryValid({ word: w, r: r0, c: c0, dir: 'H' })) {
                   seen.add(key);
                   results.push({ word: w, r: r0, c: c0, dir: 'H', used: ok.usedNew });
                 }
@@ -539,7 +701,7 @@
               const key = `V:${r0}:${c0}:${w}`;
               if (!seen.has(key) && !blockedBySideLetters(w, r0, c0, 'V') && wordHasConnection(w, r0, c0, 'V')) {
                 const ok = canConsumeRackForWord(w, r0, c0, 'V', rackCounts);
-                if (ok) {
+                if (ok && isMoveDictionaryValid({ word: w, r: r0, c: c0, dir: 'V' })) {
                   seen.add(key);
                   results.push({ word: w, r: r0, c: c0, dir: 'V', used: ok.usedNew });
                 }
@@ -565,7 +727,9 @@
       movesList.textContent = 'Hamle bulunamadı.';
       return;
     }
+    let firstMove = null;
     for (const m of moves) {
+      if (!firstMove) firstMove = m;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.style.display = 'block';
@@ -588,6 +752,21 @@
         renderBoard();
       });
       movesList.appendChild(btn);
+    }
+
+    // Kullanım kolaylığı: ilk öneriyi otomatik seç/önizle
+    if (firstMove) {
+      clearPreview();
+      selectedMove = firstMove;
+      for (let i = 0; i < firstMove.word.length; i++) {
+        const r = firstMove.r + (firstMove.dir === 'V' ? i : 0);
+        const c = firstMove.c + (firstMove.dir === 'H' ? i : 0);
+        if (!boardLetterAt(r, c)) preview[r][c] = { letter: firstMove.word[i] };
+      }
+      if (btnConfirmMove) btnConfirmMove.disabled = false;
+      if (btnClearPreview) btnClearPreview.disabled = false;
+      renderBoard();
+      setMessage('İlk öneri önizlendi. Onayla veya başka öneri seç.');
     }
   }
 
@@ -620,8 +799,65 @@
 
   if (btnConfirmMove) {
     btnConfirmMove.addEventListener('click', () => {
+      pushUndo();
       const any = commitPreview();
       if (!any) setMessage('Onaylanacak önizleme yok.');
+      // Yeni tur için rack'i her durumda temizle (refresh gerektirmesin)
+      rack = [];
+      if (rackInput) rackInput.value = '';
+      setRackFromInput(); // renderRack() dahil
+      saveToStorage();
+    });
+  }
+
+  if (btnUndo) {
+    btnUndo.addEventListener('click', () => {
+      const prev = undoStack.pop();
+      if (!prev) return;
+      redoStack.push(snapshotState());
+      applyState(prev);
+      updateUndoRedoUI();
+      saveToStorage();
+    });
+  }
+
+  if (btnRedo) {
+    btnRedo.addEventListener('click', () => {
+      const next = redoStack.pop();
+      if (!next) return;
+      undoStack.push(snapshotState());
+      applyState(next);
+      updateUndoRedoUI();
+      saveToStorage();
+    });
+  }
+
+  if (btnExport) {
+    btnExport.addEventListener('click', async () => {
+      const data = JSON.stringify(snapshotState());
+      try {
+        await navigator.clipboard.writeText(data);
+        setMessage('Durum panoya kopyalandı.');
+      } catch (_) {
+        prompt('Kopyalamak için Ctrl+C:', data);
+      }
+    });
+  }
+
+  if (btnImport) {
+    btnImport.addEventListener('click', () => {
+      const raw = prompt('İçe aktarılacak JSON:', '');
+      if (!raw) return;
+      try {
+        const state = JSON.parse(raw);
+        pushUndo();
+        applyState(state);
+        updateUndoRedoUI();
+        saveToStorage();
+        setMessage('Durum içe aktarıldı.');
+      } catch (e) {
+        setMessage(`İçe aktarma hatası: ${e?.message || e}`);
+      }
     });
   }
 
