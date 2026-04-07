@@ -14,35 +14,35 @@
           <h1>Kelimelik Asistan</h1>
           <p class="sub">Telefondaki oyunu buraya işleyin; en iyi hamleleri tahtada gösterir.</p>
         </div>
-        <button type="button" id="btnLocalPreview" class="btn-run-preview" title="Yerel sunucu adresinde aç (Örn. http://127.0.0.1:5500)">
-          Yerel önizleme
-        </button>
       </div>
     </header>
 
-    <p class="hint" id="dictHint">Sözlük yükleniyor…</p>
+    <div class="main-layout">
+      <aside class="panel actions-panel actions-rail" aria-label="İşlemler">
+        <div class="toolbar-stack">
+          <button type="button" id="btnLocalPreview" class="btn-run-preview btn-toolbar" title="Yerel sunucu adresinde aç (Örn. http://127.0.0.1:5500)">
+            Yerel önizleme
+          </button>
+          <button type="button" id="btnConfirmMove" class="btn-toolbar" disabled>Seçili öneriyi onayla</button>
+          <button type="button" id="btnClearPreview" class="btn-toolbar" disabled>Önizlemeyi temizle</button>
+          <button type="button" id="btnSolve" class="btn-toolbar">Olası hamleleri bul</button>
+          <button type="button" id="btnClearBoard" class="btn-toolbar">Tahtayı temizle</button>
+          <button type="button" id="btnClearRack" class="btn-toolbar">Raftaki harfleri temizle</button>
+        </div>
+      </aside>
 
-    <div class="solver-grid">
+      <div class="solver-grid">
       <section class="panel moves-sidebar" aria-label="Hamle önerileri">
         <div class="moves-wrap">
+          <p class="hint" id="dictHint">Sözlük yükleniyor…</p>
           <h2>Öneriler (tıklayınca tahtada yeşil)</h2>
-          <div class="controls moves-controls">
-            <button type="button" id="btnConfirmMove" disabled>Seçili öneriyi onayla</button>
-            <button type="button" id="btnClearPreview" disabled>Önizlemeyi temizle</button>
-          </div>
           <div id="movesList"></div>
         </div>
       </section>
 
       <div class="board-wrap">
         <div id="board" class="board" aria-label="Tahta"></div>
-        <p class="fine-print">Kareye tıklayın; harfi klavyeden veya alttaki harf düğmelerinden girin. Sil: boş harf.</p>
-        <div class="cell-toolbar">
-          <span id="selLabel" class="sel-label">Kare seçin</span>
-          <input type="text" id="cellInput" maxlength="2" autocomplete="off" placeholder="Harf" />
-          <button type="button" id="btnClearCell">Kareyi sil</button>
-          <button type="button" id="btnMarkStar">★/★★★ ekle</button>
-        </div>
+        <p class="fine-print">Harfleri raf veya paletten sürükleyip tahtaya bırakın. Dolu kareyi silmek için çift tıklayın.</p>
       </div>
 
       <section class="panel solver-panel">
@@ -51,30 +51,15 @@
           <input type="text" id="rackInput" placeholder="Örn: KELİM??" autocomplete="off" />
         </label>
         <div class="rack-area" aria-label="Harf rafı">
-          <div class="rack-title">Harfleri sürükleyip tahtaya bırakın</div>
           <div id="rackTiles" class="rack-tiles" role="list"></div>
-          <div class="rack-actions">
-            <button type="button" id="btnClearRack">Raftaki harfleri temizle</button>
-          </div>
         </div>
         <div class="bank-area" aria-label="Harf paleti">
-          <div class="rack-title">Alternatif: alfabeden harf sürükle (raf girmeden)</div>
           <div id="letterBank" class="letter-bank" role="list"></div>
-        </div>
-
-        <div class="controls">
-          <button type="button" id="btnSolve">Olası hamleleri bul</button>
-          <button type="button" id="btnClearBoard">Tahtayı temizle</button>
-        </div>
-        <div class="controls">
-          <button type="button" id="btnUndo">Geri al</button>
-          <button type="button" id="btnRedo">İleri al</button>
-          <button type="button" id="btnExport">Dışa aktar</button>
-          <button type="button" id="btnImport">İçe aktar</button>
         </div>
 
         <p class="msg" id="message" role="status"></p>
       </section>
+      </div>
     </div>
   </div>
 

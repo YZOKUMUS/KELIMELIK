@@ -28,21 +28,16 @@
   const boardSize = api.SIZE;
   const emptyBoard = api.emptyBoard;
   const displayLetter = api.displayLetter;
+  const LETTER_VALUES = api.LETTER_VALUES || {};
+  const PREMIUM = api.PREMIUM;
 
   const boardElement = document.getElementById('board');
   const rackInput = document.getElementById('rackInput');
   const rackTiles = document.getElementById('rackTiles');
   const btnClearRack = document.getElementById('btnClearRack');
   const letterBank = document.getElementById('letterBank');
-  const selLabel = document.getElementById('selLabel');
-  const cellInput = document.getElementById('cellInput');
-  const btnClearCell = document.getElementById('btnClearCell');
   const btnSolve = document.getElementById('btnSolve');
   const btnClearBoard = document.getElementById('btnClearBoard');
-  const btnUndo = document.getElementById('btnUndo');
-  const btnRedo = document.getElementById('btnRedo');
-  const btnExport = document.getElementById('btnExport');
-  const btnImport = document.getElementById('btnImport');
   const movesList = document.getElementById('movesList');
   const messageEl = document.getElementById('message');
   const btnConfirmMove = document.getElementById('btnConfirmMove');
@@ -50,8 +45,6 @@
   const committed = emptyBoard();
   const preview = emptyBoard(); // only preview letters
   let rack = [];
-  let selected = { r: null, c: null };
-  let writeDir = 'H'; // H=right, V=down
   let selectedMove = null;
 
   let DICT_WORDS = null; // string[]
@@ -59,8 +52,6 @@
   let DICT_SET = null; // Set<string>
 
   const STORAGE_KEY = 'kelimelik-assistant-state-v1';
-  const undoStack = [];
-  const redoStack = [];
 
   if (dictHint) dictHint.textContent = 'Hazır.';
 
@@ -76,6 +67,37 @@
   function previewLetterAt(r, c) {
     const t = preview[r]?.[c];
     return t?.letter ? String(t.letter).toUpperCase() : '';
+  }
+
+  /** Tahta üzerinde gösterilen harf yüz puanı (joker seçili harf veya 0) */
+  function faceValueForTile(tile) {
+    if (!tile) return 0;
+    if (tile.blank && tile.jokerLetter) {
+      const u = String(tile.jokerLetter).toUpperCase();
+      return LETTER_VALUES[u] ?? 0;
+    }
+    const ch = String(tile.letter || '').toUpperCase();
+    if (ch === '?') return 0;
+    return LETTER_VALUES[ch] ?? 0;
+  }
+
+  function faceValueForLetterChar(ch) {
+    const u = String(ch || '').toUpperCase();
+    if (!u || u === '?') return 0;
+    return LETTER_VALUES[u] ?? 0;
+  }
+
+  function setCellLetterContent(cell, letterText, points) {
+    cell.textContent = '';
+    const letterEl = document.createElement('span');
+    letterEl.className = 'cell-letter';
+    letterEl.textContent = letterText;
+    const ptsEl = document.createElement('span');
+    ptsEl.className = 'cell-points';
+    ptsEl.textContent = String(points);
+    ptsEl.setAttribute('aria-hidden', 'true');
+    cell.appendChild(letterEl);
+    cell.appendChild(ptsEl);
   }
 
   function clearPreview() {
@@ -97,8 +119,6 @@
     return {
       board,
       rackText: rackInput ? rackInput.value || '' : '',
-      selected,
-      writeDir,
     };
   }
 
@@ -112,29 +132,7 @@
     clearPreview();
     if (rackInput) rackInput.value = state?.rackText || '';
     setRackFromInput();
-    selected = state?.selected && Number.isFinite(state.selected.r) && Number.isFinite(state.selected.c)
-      ? { r: state.selected.r, c: state.selected.c }
-      : { r: null, c: null };
-    writeDir = state?.writeDir === 'V' ? 'V' : 'H';
-    if (selLabel) {
-      selLabel.textContent =
-        selected.r != null && selected.c != null
-          ? `Seçili: ${selected.r},${selected.c} (${writeDir === 'H' ? '→' : '↓'})`
-          : 'Kare seçin';
-    }
     renderBoard();
-  }
-
-  function updateUndoRedoUI() {
-    if (btnUndo) btnUndo.disabled = undoStack.length === 0;
-    if (btnRedo) btnRedo.disabled = redoStack.length === 0;
-  }
-
-  function pushUndo() {
-    undoStack.push(snapshotState());
-    if (undoStack.length > 50) undoStack.shift();
-    redoStack.length = 0;
-    updateUndoRedoUI();
   }
 
   function saveToStorage() {
@@ -182,6 +180,22 @@
       }
     }
     return false;
+  }
+
+  /** Sözlük ve kelime karşılaştırması için Türkçe büyük harf (i→İ vb.) */
+  function trUpper(s) {
+    return String(s ?? '').toLocaleUpperCase('tr-TR');
+  }
+
+  function normalizeDictWords(words) {
+    if (!Array.isArray(words)) return [];
+    const out = [];
+    for (let i = 0; i < words.length; i++) {
+      const w = String(words[i] ?? '').trim();
+      if (w.length === 0) continue;
+      out.push(trUpper(w));
+    }
+    return out;
   }
 
   function buildDictIndex(words) {
@@ -235,8 +249,9 @@
       try {
         if (dictHint) dictHint.textContent = 'Sözlük okunuyor…';
         const text = await f.text();
-        const words = JSON.parse(text);
-        if (!Array.isArray(words)) throw new Error('Sözlük JSON array değil.');
+        const raw = JSON.parse(text);
+        if (!Array.isArray(raw)) throw new Error('Sözlük JSON array değil.');
+        const words = normalizeDictWords(raw);
         DICT_WORDS = words;
         DICT_INDEX = buildDictIndex(words);
         DICT_SET = buildDictSet(words);
@@ -259,8 +274,9 @@
       // file:// altında fetch engellenebilir; başarısızsa file picker'a düşeceğiz
       const res = await fetch('kelimeler.json', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const words = await res.json();
-      if (!Array.isArray(words)) throw new Error('Sözlük JSON array değil.');
+      const raw = await res.json();
+      if (!Array.isArray(raw)) throw new Error('Sözlük JSON array değil.');
+      const words = normalizeDictWords(raw);
       DICT_WORDS = words;
       DICT_INDEX = buildDictIndex(words);
       DICT_SET = buildDictSet(words);
@@ -343,17 +359,19 @@
       for (let c = 0; c < boardSize; c++) {
         const cell = document.createElement('div');
         cell.classList.add('cell');
+        const centerIdx = Math.floor(boardSize / 2);
+        if (r === centerIdx && c === centerIdx) cell.classList.add('cell-center');
         cell.dataset.row = r;
         cell.dataset.col = c;
         const tile = committed[r][c];
         const committedText = displayLetter(tile);
         if (committedText) {
-          cell.textContent = committedText;
+          setCellLetterContent(cell, committedText, faceValueForTile(tile));
           cell.classList.add('cell-has-letter');
         } else {
           const pv = previewLetterAt(r, c);
           if (pv) {
-            cell.textContent = pv;
+            setCellLetterContent(cell, pv, faceValueForLetterChar(pv));
             cell.classList.add('preview', 'cell-has-letter');
           } else {
             cell.textContent = '';
@@ -388,27 +406,17 @@
           }
         });
 
-        cell.addEventListener('click', () => {
-          selectCell(r, c);
+        cell.addEventListener('dblclick', () => {
+          if (boardLetterAt(r, c) || previewLetterAt(r, c)) clearCell(r, c);
         });
         boardElement.appendChild(cell);
       }
     }
   }
 
-  function selectCell(r, c) {
-    selected = { r, c };
-    if (selLabel) selLabel.textContent = `Seçili: ${r},${c} (${writeDir === 'H' ? '→' : '↓'})`;
-    if (cellInput) {
-      cellInput.value = '';
-      cellInput.focus();
-    }
-  }
-
   function placeLetterDirect(r, c, ch) {
     const letter = String(ch).toUpperCase();
     if (!letter || letter.length !== 1) return;
-    pushUndo();
     committed[r][c] = { letter };
     preview[r][c] = null;
     renderBoard();
@@ -416,38 +424,10 @@
   }
 
   function clearCell(r, c) {
-    pushUndo();
     committed[r][c] = null;
     preview[r][c] = null;
     renderBoard();
     saveToStorage();
-  }
-
-  function cleanTextForBoard(text) {
-    return String(text || '')
-      .toUpperCase()
-      .replace(/\s+/g, '')
-      .replace(/[^A-ZÇĞİÖŞÜ\?]/g, '');
-  }
-
-  function placeTextFromSelection(text) {
-    const t = cleanTextForBoard(text);
-    if (!t) return;
-    if (selected.r == null || selected.c == null) return;
-
-    let r = selected.r;
-    let c = selected.c;
-    for (let i = 0; i < t.length; i++) {
-      const ch = t[i];
-      if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) break;
-      placeLetterDirect(r, c, ch);
-      if (writeDir === 'H') c += 1;
-      else r += 1;
-    }
-
-    // imleci bir sonraki hücreye taşı
-    selected = { r, c };
-    if (selLabel) selLabel.textContent = `Seçili: ${Math.min(r, boardSize - 1)},${Math.min(c, boardSize - 1)} (${writeDir === 'H' ? '→' : '↓'})`;
   }
 
   // İlk render
@@ -457,35 +437,9 @@
   renderLetterBank();
   loadDictionary();
   loadFromStorage();
-  updateUndoRedoUI();
-
-  // Klavye ile hızlı yazma: kare seç -> yaz -> Enter
-  if (cellInput) {
-    cellInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        placeTextFromSelection(cellInput.value);
-        cellInput.value = '';
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        writeDir = writeDir === 'H' ? 'V' : 'H';
-        if (selLabel && selected.r != null && selected.c != null) {
-          selLabel.textContent = `Seçili: ${selected.r},${selected.c} (${writeDir === 'H' ? '→' : '↓'})`;
-        }
-      }
-    });
-  }
-
-  if (btnClearCell) {
-    btnClearCell.addEventListener('click', () => {
-      if (selected.r == null || selected.c == null) return;
-      clearCell(selected.r, selected.c);
-    });
-  }
 
   if (btnClearBoard) {
     btnClearBoard.addEventListener('click', () => {
-      pushUndo();
       for (let r = 0; r < boardSize; r++) {
         for (let c = 0; c < boardSize; c++) committed[r][c] = null;
       }
@@ -513,6 +467,26 @@
     const counts = new Map();
     for (const ch of t) counts.set(ch, (counts.get(ch) || 0) + 1);
     return counts;
+  }
+
+  /** Kelimenin harf yüz değerleri toplamı (sıralama için) */
+  function wordLetterPoints(word) {
+    let s = 0;
+    for (let i = 0; i < word.length; i++) {
+      s += LETTER_VALUES[word[i]] || 0;
+    }
+    return s;
+  }
+
+  function sortMovesResults(results) {
+    results.sort(
+      (a, b) =>
+        (b.score ?? 0) - (a.score ?? 0) ||
+        wordLetterPoints(b.word) - wordLetterPoints(a.word) ||
+        b.word.length - a.word.length ||
+        a.used - b.used ||
+        a.word.localeCompare(b.word, 'tr')
+    );
   }
 
   function canConsumeRackForWord(word, r0, c0, dir, rackCounts) {
@@ -547,7 +521,7 @@
 
   function dictHas(word) {
     if (!DICT_SET) return false;
-    return DICT_SET.has(word);
+    return DICT_SET.has(trUpper(word));
   }
 
   function letterAtWithMove(r, c, move) {
@@ -597,19 +571,115 @@
     return out;
   }
 
+  /** Bu hamlede tahtaya konan kareler (mevcut tahtaya göre). */
+  function newCellsForMove(move) {
+    const set = new Set();
+    const dr = move.dir === 'V' ? 1 : 0;
+    const dc = move.dir === 'H' ? 1 : 0;
+    for (let i = 0; i < move.word.length; i++) {
+      const r = move.r + dr * i;
+      const c = move.c + dc * i;
+      if (!boardLetterAt(r, c)) set.add(`${r},${c}`);
+    }
+    return set;
+  }
+
+  /**
+   * Tek satır/sütun kelime skoru: yeni taşlar PREMIUM ile (DL/TL/DW/TW).
+   * PREMIUM: 0 düz, 1 çift harf, 2 üçlü harf, 3 çift kelime, 4 üçlü kelime.
+   */
+  function scoreWordLine(word, r0, c0, dr, dc, newCells) {
+    if (!PREMIUM) return 0;
+    let sum = 0;
+    let wordMult = 1;
+    for (let i = 0; i < word.length; i++) {
+      const r = r0 + dr * i;
+      const c = c0 + dc * i;
+      let v = LETTER_VALUES[word[i]] || 0;
+      if (newCells.has(`${r},${c}`)) {
+        const p = PREMIUM[r]?.[c] ?? 0;
+        if (p === 1) v *= 2;
+        else if (p === 2) v *= 3;
+        else if (p === 3) wordMult *= 2;
+        else if (p === 4) wordMult *= 3;
+      }
+      sum += v;
+    }
+    return sum * wordMult;
+  }
+
+  /** Ana kelime + oluşan çapraz kelimeler + 7 taş bonusu (50). */
+  function scoreMove(move) {
+    const newCells = newCellsForMove(move);
+    const dr = move.dir === 'V' ? 1 : 0;
+    const dc = move.dir === 'H' ? 1 : 0;
+    let total = scoreWordLine(move.word, move.r, move.c, dr, dc, newCells);
+    const crossDir = move.dir === 'H' ? 'V' : 'H';
+    const dr2 = crossDir === 'V' ? 1 : 0;
+    const dc2 = crossDir === 'H' ? 1 : 0;
+    const seenCross = new Set();
+    for (let i = 0; i < move.word.length; i++) {
+      const r = move.r + dr * i;
+      const c = move.c + dc * i;
+      if (!newCells.has(`${r},${c}`)) continue;
+      const cw = buildWordAt(r, c, crossDir, move);
+      if (cw.length < 2) continue;
+      let r0 = r;
+      let c0 = c;
+      while (true) {
+        const rr = r0 - dr2;
+        const cc = c0 - dc2;
+        if (rr < 0 || rr >= boardSize || cc < 0 || cc >= boardSize) break;
+        if (!letterAtWithMove(rr, cc, move)) break;
+        r0 = rr;
+        c0 = cc;
+      }
+      const ck = `${crossDir}:${r0},${c0}`;
+      if (seenCross.has(ck)) continue;
+      seenCross.add(ck);
+      total += scoreWordLine(cw, r0, c0, dr2, dc2, newCells);
+    }
+    if (move.used === 7) total += 50;
+    return total;
+  }
+
+  function annotateMoveScores(results) {
+    for (let i = 0; i < results.length; i++) {
+      results[i].score = scoreMove(results[i]);
+    }
+  }
+
+  /** Hamle satırı boyunca her karede hem yatay hem dikey tam kelime sözlükte olmalı (uzunluk ≥ 2). */
   function isMoveDictionaryValid(move) {
-    // main word must be dictionary word (it is), but we also validate cross words created by new tiles
     if (!dictHas(move.word)) return false;
 
-    for (let i = 0; i < move.word.length; i++) {
-      const r = move.r + (move.dir === 'V' ? i : 0);
-      const c = move.c + (move.dir === 'H' ? i : 0);
-      const existing = boardLetterAt(r, c);
-      if (existing) continue; // not a new tile => doesn't create a new cross word by itself
+    const dr = move.dir === 'V' ? 1 : 0;
+    const dc = move.dir === 'H' ? 1 : 0;
+    const seenLine = new Set();
 
-      const crossDir = move.dir === 'H' ? 'V' : 'H';
-      const crossWord = buildWordAt(r, c, crossDir, move);
-      if (crossWord.length >= 2 && !dictHas(crossWord)) return false;
+    for (let i = 0; i < move.word.length; i++) {
+      const r = move.r + dr * i;
+      const c = move.c + dc * i;
+      for (const dir of ['H', 'V']) {
+        const wline = buildWordAt(r, c, dir, move);
+        if (wline.length < 2) continue;
+        const dr2 = dir === 'V' ? 1 : 0;
+        const dc2 = dir === 'H' ? 1 : 0;
+        let r0 = r;
+        let c0 = c;
+        while (true) {
+          const rr = r0 - dr2;
+          const cc = c0 - dc2;
+          if (rr < 0 || rr >= boardSize || cc < 0 || cc >= boardSize) break;
+          if (!letterAtWithMove(rr, cc, move)) break;
+          r0 = rr;
+          c0 = cc;
+        }
+        const ck = `${dir}:${r0},${c0}`;
+        if (seenLine.has(ck)) continue;
+        seenLine.add(ck);
+        if (!dictHas(wline)) return false;
+      }
     }
 
     return true;
@@ -662,7 +732,7 @@
     return cells;
   }
 
-  function findMoves(words, index, rackText, limit = 50) {
+  function findMoves(words, index, rackText, limit = 10) {
     const rackCounts = rackCountsFromText(rackText);
     const existing = listExistingCells();
     const results = [];
@@ -670,7 +740,7 @@
     if (existing.length === 0) {
       // very simple: place any word that fits through center with rack
       const center = 7;
-      for (let wi = 0; wi < words.length && results.length < limit; wi++) {
+      for (let wi = 0; wi < words.length && results.length < limit * 3; wi++) {
         const w = words[wi];
         if (w.length < 2 || w.length > boardSize) continue;
         const r0 = center;
@@ -679,9 +749,12 @@
         if (blockedBySideLetters(w, r0, c0, 'H')) continue;
         const ok = canConsumeRackForWord(w, r0, c0, 'H', rackCounts);
         if (!ok) continue;
+        if (!isMoveDictionaryValid({ word: w, r: r0, c: c0, dir: 'H' })) continue;
         results.push({ word: w, r: r0, c: c0, dir: 'H', used: ok.usedNew });
       }
-      return results;
+      annotateMoveScores(results);
+      sortMovesResults(results);
+      return results.slice(0, limit);
     }
 
     // overlap-based search
@@ -729,10 +802,10 @@
       if (results.length >= limit * 3) break; // cap work
     }
 
-    // 1) En uzun kelime önce
-    // 2) Aynı uzunlukta daha az yeni taş kullanan önce
-    // 3) Sonra alfabetik
-    results.sort((a, b) => b.word.length - a.word.length || a.used - b.used || a.word.localeCompare(b.word, 'tr'));
+    // 1) En yüksek toplam hamle puanı (premium + çapraz + 7 taş)
+    // 2) Sonra harf yüz toplamı, uzunluk, az yeni taş, alfabetik
+    annotateMoveScores(results);
+    sortMovesResults(results);
     return results.slice(0, limit);
   }
 
@@ -753,7 +826,8 @@
       btn.style.textAlign = 'left';
       btn.style.padding = '8px 10px';
       btn.style.margin = '6px 0';
-      btn.textContent = `${m.word}  —  ${m.dir === 'H' ? '→' : '↓'}  (${m.r},${m.c})`;
+      const pts = m.score ?? scoreMove(m);
+      btn.textContent = `${m.word}  —  ${m.dir === 'H' ? '→' : '↓'}  ·  Toplam: ${pts} puan`;
       btn.addEventListener('click', () => {
         // Önceki onaylanmamış önizleme temizlenir, yenisi basılır
         clearPreview();
@@ -800,7 +874,7 @@
         return;
       }
       const rackText = rackInput.value || '';
-      const moves = findMoves(DICT_WORDS, DICT_INDEX, rackText, 60);
+      const moves = findMoves(DICT_WORDS, DICT_INDEX, rackText, 10);
       renderMoves(moves);
       setMessage(moves.length ? `${moves.length} hamle bulundu.` : 'Hamle bulunamadı.');
     });
@@ -815,7 +889,6 @@
 
   if (btnConfirmMove) {
     btnConfirmMove.addEventListener('click', () => {
-      pushUndo();
       const any = commitPreview();
       if (!any) setMessage('Onaylanacak önizleme yok.');
       // Yeni tur için rack'i her durumda temizle (refresh gerektirmesin)
@@ -823,57 +896,6 @@
       if (rackInput) rackInput.value = '';
       setRackFromInput(); // renderRack() dahil
       saveToStorage();
-    });
-  }
-
-  if (btnUndo) {
-    btnUndo.addEventListener('click', () => {
-      const prev = undoStack.pop();
-      if (!prev) return;
-      redoStack.push(snapshotState());
-      applyState(prev);
-      updateUndoRedoUI();
-      saveToStorage();
-    });
-  }
-
-  if (btnRedo) {
-    btnRedo.addEventListener('click', () => {
-      const next = redoStack.pop();
-      if (!next) return;
-      undoStack.push(snapshotState());
-      applyState(next);
-      updateUndoRedoUI();
-      saveToStorage();
-    });
-  }
-
-  if (btnExport) {
-    btnExport.addEventListener('click', async () => {
-      const data = JSON.stringify(snapshotState());
-      try {
-        await navigator.clipboard.writeText(data);
-        setMessage('Durum panoya kopyalandı.');
-      } catch (_) {
-        prompt('Kopyalamak için Ctrl+C:', data);
-      }
-    });
-  }
-
-  if (btnImport) {
-    btnImport.addEventListener('click', () => {
-      const raw = prompt('İçe aktarılacak JSON:', '');
-      if (!raw) return;
-      try {
-        const state = JSON.parse(raw);
-        pushUndo();
-        applyState(state);
-        updateUndoRedoUI();
-        saveToStorage();
-        setMessage('Durum içe aktarıldı.');
-      } catch (e) {
-        setMessage(`İçe aktarma hatası: ${e?.message || e}`);
-      }
     });
   }
 

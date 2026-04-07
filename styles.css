@@ -62,6 +62,61 @@ body {
   box-sizing: border-box;
 }
 
+/* Sol şerit: kompakt düğmeler | sağda tahta + paneller */
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.actions-panel.actions-rail {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 8px;
+}
+
+.toolbar-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.btn-toolbar {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #c8c8c8;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fafafa 0%, #ececec 100%);
+  color: #222;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  line-height: 1.25;
+}
+
+.btn-toolbar:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.btn-toolbar:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.toolbar-stack .btn-run-preview {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .solver-grid {
   display: grid;
   gap: 18px;
@@ -70,8 +125,22 @@ body {
   grid-template-columns: 1fr;
 }
 
-/* Dar ekran: tahta üstte, öneriler tahtanın altında (sol sütun hissi korunur) */
+/* Dar ekran: tahta üstte; düğmeler altta kompakt ızgara */
 @media (max-width: 1319px) {
+  .main-layout .solver-grid {
+    order: 1;
+  }
+
+  .main-layout .actions-rail {
+    order: 2;
+  }
+
+  .toolbar-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
   .board-wrap {
     order: 1;
   }
@@ -85,10 +154,32 @@ body {
   }
 }
 
-/* Geniş ekran: öneriler | tahta | kontroller */
+/* Geniş ekran: sol ince düğme şeridi | öneriler | tahta (orta) | raf */
 @media (min-width: 1320px) {
+  .main-layout {
+    display: grid;
+    grid-template-columns: 168px minmax(0, 1fr);
+    gap: 14px 18px;
+    align-items: start;
+  }
+
+  .actions-rail {
+    position: sticky;
+    top: 12px;
+    z-index: 2;
+    justify-self: start;
+    width: 168px;
+  }
+
   .solver-grid {
-    grid-template-columns: 340px minmax(620px, auto) 340px;
+    grid-template-columns: minmax(280px, 340px) minmax(620px, 1fr) minmax(280px, 340px);
+    min-width: 0;
+  }
+
+  .board-wrap {
+    justify-self: center;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
@@ -102,7 +193,8 @@ body {
 
 @media (min-width: 1320px) {
   .solver-panel {
-    width: 340px;
+    width: 100%;
+    max-width: 100%;
     margin-left: 0;
     margin-right: 0;
   }
@@ -117,7 +209,8 @@ body {
 
 @media (min-width: 1320px) {
   .moves-sidebar {
-    width: 340px;
+    width: 100%;
+    max-width: 100%;
     margin: 0;
     position: sticky;
     top: 12px;
@@ -138,16 +231,20 @@ body {
   text-align: left;
 }
 
+.moves-wrap .hint {
+  margin: 0 0 10px;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #444;
+  line-height: 1.35;
+}
+
 .moves-wrap h2 {
   font-size: 1.1rem;
   margin: 0 0 8px;
 }
 
-.moves-controls {
-  justify-content: flex-start;
-}
-
-/* Liste taşmasın; başlık ve düğmeler görünür kalsın */
+/* Liste taşmasın; başlık görünür kalsın */
 #movesList {
   flex: 1 1 auto;
   min-height: 120px;
@@ -175,28 +272,14 @@ body {
   padding: 8px 10px;
 }
 
-.controls {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 10px 0 12px;
-}
-
-.controls button,
-.rack-actions button,
-.cell-toolbar button {
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
 .board-wrap,
 #boardWrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 20px auto;
-  min-width: 620px;
+  margin: 12px auto;
+  min-width: min(100%, 620px);
   min-height: 620px;
 }
 
@@ -208,6 +291,7 @@ body {
 }
 
 .cell {
+  position: relative;
   width: 40px;
   height: 40px;
   border: 1px solid #333;
@@ -220,8 +304,70 @@ body {
   user-select: none;
 }
 
-.cell:hover:not(.cell-has-letter) {
+.cell .cell-letter {
+  position: relative;
+  z-index: 0;
+}
+
+.cell .cell-points {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.cell:hover:not(.cell-has-letter):not(.cell-center) {
   background-color: #ddd;
+}
+
+.cell.cell-center:hover:not(.cell-has-letter) {
+  filter: brightness(1.06);
+}
+
+/* Merkez başlangıç karesi (ilk harf buraya konur) */
+.cell.cell-center:not(.cell-has-letter) {
+  background: radial-gradient(circle at 50% 45%, #ffe8ee 0%, #e8a0b8 55%, #d07090 100%);
+  border-color: #a84868;
+}
+
+.cell.cell-center.preview:not(.cell-has-letter) {
+  background: linear-gradient(
+      rgba(180, 235, 190, 0.92),
+      rgba(180, 235, 190, 0.92)
+    ),
+    radial-gradient(circle at 50% 45%, #ffe8ee 0%, #e8a0b8 55%, #c86888 100%);
+  border-color: #3d8a52;
+}
+
+.cell.cell-has-letter.cell-center {
+  background-image: linear-gradient(
+      rgba(255, 210, 220, 0.5),
+      rgba(255, 210, 220, 0.5)
+    ),
+    var(--wood-tile);
+  background-size: auto, var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
+  border-color: #b85a72;
+}
+
+.cell.cell-has-letter.cell-center.preview {
+  background-image: linear-gradient(
+      rgba(160, 220, 160, 0.38),
+      rgba(160, 220, 160, 0.38)
+    ),
+    linear-gradient(
+      rgba(255, 210, 220, 0.45),
+      rgba(255, 210, 220, 0.45)
+    ),
+    var(--wood-tile);
+  background-size: auto, auto, var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
 }
 
 #picker {
@@ -235,12 +381,6 @@ body {
   border-radius: 10px;
   background: #fafafa;
   text-align: left;
-}
-
-.rack-title {
-  font-size: 13px;
-  opacity: 0.85;
-  margin-bottom: 8px;
 }
 
 .rack-tiles {
@@ -322,10 +462,6 @@ body {
     var(--wood-tile);
   background-size: auto, var(--wood-tile-size) var(--wood-tile-size);
   background-repeat: repeat;
-}
-
-.rack-actions {
-  margin-top: 10px;
 }
 
 .bank-area {
