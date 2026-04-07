@@ -1,0 +1,10 @@
+{
+  "name": "kelimelik",
+  "private": true,
+  "scripts": {
+    "start": "serve . -l 5500"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}
