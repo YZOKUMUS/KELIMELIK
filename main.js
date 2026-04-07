@@ -334,11 +334,12 @@
         const committedText = displayLetter(tile);
         if (committedText) {
           cell.textContent = committedText;
+          cell.classList.add('cell-has-letter');
         } else {
           const pv = previewLetterAt(r, c);
           if (pv) {
             cell.textContent = pv;
-            cell.classList.add('preview');
+            cell.classList.add('preview', 'cell-has-letter');
           } else {
             cell.textContent = '';
           }

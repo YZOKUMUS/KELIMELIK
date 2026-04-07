@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Procedural wood grain tile (seamless repeat)</title>
+  <defs>
+    <linearGradient id="woodBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e6cf9e"/>
+      <stop offset="35%" stop-color="#d4b27a"/>
+      <stop offset="65%" stop-color="#c9a06a"/>
+      <stop offset="100%" stop-color="#dcc494"/>
+    </linearGradient>
+    <linearGradient id="woodSheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="60%" stop-color="#3d2914" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1"/>
+    </linearGradient>
+    <filter id="grain" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.7 0.015" numOctaves="5" seed="7" result="n"/>
+      <feColorMatrix in="n" type="matrix"
+        values="0.4 0 0 0 0
+                0.35 0 0 0 0
+                0.25 0 0 0 0
+                0 0 0 0.5 0" result="g"/>
+      <feBlend in="SourceGraphic" in2="g" mode="multiply"/>
+    </filter>
+  </defs>
+  <rect width="256" height="256" fill="url(#woodBase)"/>
+  <rect width="256" height="256" fill="url(#woodSheen)" filter="url(#grain)"/>
+</svg>

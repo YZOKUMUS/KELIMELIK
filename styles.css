@@ -1,3 +1,11 @@
+:root {
+  /* Tekrarlayan ahşap dokusu: assets/wood-tile.svg (procedural grain) */
+  --wood-tile: url("assets/wood-tile.svg");
+  --wood-border: #5c4033;
+  --wood-text: #1a1208;
+  --wood-tile-size: 96px;
+}
+
 body {
   font-family: Arial, sans-serif;
   text-align: center;
@@ -175,7 +183,7 @@ body {
   user-select: none;
 }
 
-.cell:hover {
+.cell:hover:not(.cell-has-letter) {
   background-color: #ddd;
 }
 
@@ -208,15 +216,23 @@ body {
 .tile {
   width: 40px;
   height: 40px;
-  border: 1px solid #333;
+  border: 1px solid var(--wood-border);
   border-radius: 8px;
-  background: #fff;
+  background-color: #d4b27a;
+  background-image: var(--wood-tile);
+  background-size: var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
+  color: var(--wood-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   cursor: grab;
   user-select: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.12);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .tile:active {
@@ -224,7 +240,14 @@ body {
 }
 
 .tile.blank {
-  background: #fff7d6;
+  background-color: #e8d4a8;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.35),
+      rgba(255, 255, 255, 0.35)
+    ),
+    var(--wood-tile);
+  background-size: auto, var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
 }
 
 .cell.drag-over {
@@ -232,8 +255,36 @@ body {
   outline-offset: -2px;
 }
 
-.cell.preview {
+.cell.preview:not(.cell-has-letter) {
   background-color: #d9f7d9;
+}
+
+.cell.cell-has-letter {
+  background-color: #d4b27a;
+  background-image: var(--wood-tile);
+  background-size: var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
+  border-color: var(--wood-border);
+  color: var(--wood-text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.cell.cell-has-letter:hover {
+  filter: brightness(0.97);
+}
+
+.cell.preview.cell-has-letter {
+  background-color: #d4b27a;
+  background-image: linear-gradient(
+      rgba(160, 220, 160, 0.42),
+      rgba(160, 220, 160, 0.42)
+    ),
+    var(--wood-tile);
+  background-size: auto, var(--wood-tile-size) var(--wood-tile-size);
+  background-repeat: repeat;
 }
 
 .rack-actions {
