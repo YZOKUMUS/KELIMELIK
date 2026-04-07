@@ -1,6 +1,21 @@
 (() => {
+  /** Yerel önizleme düğmesi; `scripts/preview-local.ps1` ile aynı port */
+  const LOCAL_PREVIEW_PORT = 5500;
+
   const dictHint = document.getElementById('dictHint');
   if (dictHint) dictHint.textContent = 'Başlatılıyor…';
+
+  const btnLocalPreview = document.getElementById('btnLocalPreview');
+  if (btnLocalPreview) {
+    btnLocalPreview.addEventListener('click', () => {
+      const u = new URL(window.location.href);
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        window.open(`${u.origin}${u.pathname}${u.search}`, '_blank', 'noopener');
+      } else {
+        window.open(`http://127.0.0.1:${LOCAL_PREVIEW_PORT}/index.html`, '_blank', 'noopener');
+      }
+    });
+  }
 
   const api = window.Kelimelik;
   if (!api) {

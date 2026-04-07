@@ -11,6 +11,43 @@ body {
   text-align: center;
 }
 
+.head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.head-titles {
+  flex: 1 1 240px;
+  text-align: center;
+}
+
+.btn-run-preview {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #2f6f4f;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #3d9a6c 0%, #2d7a55 100%);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.btn-run-preview:hover {
+  filter: brightness(1.06);
+}
+
+.btn-run-preview:active {
+  filter: brightness(0.96);
+}
+
 .app {
   max-width: 1420px;
   margin: 0 auto;
