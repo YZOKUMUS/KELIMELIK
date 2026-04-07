@@ -2,9 +2,11 @@
   "name": "kelimelik",
   "private": true,
   "scripts": {
-    "start": "serve . -l 5500"
+    "start": "serve . -l 5500",
+    "dev": "five-server"
   },
   "devDependencies": {
+    "five-server": "^0.4.5",
     "serve": "^14.2.4"
   }
 }
