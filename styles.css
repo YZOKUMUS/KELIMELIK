@@ -4,22 +4,117 @@ body {
 }
 
 .app {
-  max-width: 1100px;
+  max-width: 1420px;
   margin: 0 auto;
   padding: 16px;
 }
 
+.panel {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
 .solver-grid {
-  display: flex;
+  display: grid;
   gap: 18px;
-  align-items: flex-start;
+  align-items: start;
   justify-content: center;
-  flex-wrap: wrap;
+  grid-template-columns: 1fr;
+}
+
+/* Dar ekran: tahta üstte, öneriler tahtanın altında (sol sütun hissi korunur) */
+@media (max-width: 1319px) {
+  .board-wrap {
+    order: 1;
+  }
+
+  .moves-sidebar {
+    order: 2;
+  }
+
+  .solver-panel {
+    order: 3;
+  }
+}
+
+/* Geniş ekran: öneriler | tahta | kontroller */
+@media (min-width: 1320px) {
+  .solver-grid {
+    grid-template-columns: 340px minmax(620px, auto) 340px;
+  }
 }
 
 .solver-panel {
-  width: 340px;
+  width: 100%;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
   text-align: left;
+}
+
+@media (min-width: 1320px) {
+  .solver-panel {
+    width: 340px;
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+.moves-sidebar {
+  width: 100%;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 1320px) {
+  .moves-sidebar {
+    width: 340px;
+    margin: 0;
+    position: sticky;
+    top: 12px;
+    align-self: start;
+    max-height: calc(100vh - 24px);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+
+.moves-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.moves-wrap h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.moves-controls {
+  justify-content: flex-start;
+}
+
+/* Liste taşmasın; başlık ve düğmeler görünür kalsın */
+#movesList {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: min(1200px, calc(100vh - 220px));
+  overflow: auto;
+  padding-right: 6px;
+}
+
+@media (min-width: 1320px) {
+  #movesList {
+    max-height: calc(100vh - 220px);
+  }
 }
 
 .solver-panel label {

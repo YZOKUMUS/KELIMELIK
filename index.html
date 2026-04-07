@@ -16,6 +16,17 @@
     <p class="hint" id="dictHint">Sözlük yükleniyor…</p>
 
     <div class="solver-grid">
+      <section class="panel moves-sidebar" aria-label="Hamle önerileri">
+        <div class="moves-wrap">
+          <h2>Öneriler (tıklayınca tahtada yeşil)</h2>
+          <div class="controls moves-controls">
+            <button type="button" id="btnConfirmMove" disabled>Seçili öneriyi onayla</button>
+            <button type="button" id="btnClearPreview" disabled>Önizlemeyi temizle</button>
+          </div>
+          <div id="movesList"></div>
+        </div>
+      </section>
+
       <div class="board-wrap">
         <div id="board" class="board" aria-label="Tahta"></div>
         <p class="fine-print">Kareye tıklayın; harfi klavyeden veya alttaki harf düğmelerinden girin. Sil: boş harf.</p>
@@ -56,15 +67,6 @@
         </div>
 
         <p class="msg" id="message" role="status"></p>
-
-        <div class="moves-wrap">
-          <h2>Öneriler (tıklayınca tahtada yeşil)</h2>
-          <div class="controls" style="justify-content:flex-start">
-            <button type="button" id="btnConfirmMove" disabled>Seçili öneriyi onayla</button>
-            <button type="button" id="btnClearPreview" disabled>Önizlemeyi temizle</button>
-          </div>
-          <div id="movesList"></div>
-        </div>
       </section>
     </div>
   </div>
