@@ -2,9 +2,6 @@
   /** Yerel önizleme düğmesi; `scripts/preview-local.ps1` ile aynı port */
   const LOCAL_PREVIEW_PORT = 5500;
 
-  const dictHint = document.getElementById('dictHint');
-  if (dictHint) dictHint.textContent = 'Başlatılıyor…';
-
   const btnLocalPreview = document.getElementById('btnLocalPreview');
   if (btnLocalPreview) {
     btnLocalPreview.addEventListener('click', () => {
@@ -21,11 +18,13 @@
   if (!api) {
     const msg = 'Hata: solver_rules.js yüklenmedi (window.Kelimelik yok).';
     console.error(msg);
-    if (dictHint) dictHint.textContent = msg;
+    const m = document.getElementById('message');
+    if (m) m.textContent = msg;
     throw new Error(msg);
   }
 
   const boardSize = api.SIZE;
+  const CENTER = api.CENTER ?? 7;
   const emptyBoard = api.emptyBoard;
   const displayLetter = api.displayLetter;
   const LETTER_VALUES = api.LETTER_VALUES || {};
@@ -52,8 +51,7 @@
   let DICT_SET = null; // Set<string>
 
   const STORAGE_KEY = 'kelimelik-assistant-state-v1';
-
-  if (dictHint) dictHint.textContent = 'Hazır.';
+  const STORAGE_KEY_BAK = 'kelimelik-assistant-state-v1.bak';
 
   function setMessage(text) {
     if (messageEl) messageEl.textContent = text || '';
@@ -100,13 +98,18 @@
     cell.appendChild(ptsEl);
   }
 
+  function syncPreviewActionButtons() {
+    const has = hasPreviewLetters();
+    if (btnConfirmMove) btnConfirmMove.disabled = !has;
+    if (btnClearPreview) btnClearPreview.disabled = !has;
+  }
+
   function clearPreview() {
     for (let r = 0; r < boardSize; r++) {
       for (let c = 0; c < boardSize; c++) preview[r][c] = null;
     }
     selectedMove = null;
-    if (btnConfirmMove) btnConfirmMove.disabled = true;
-    if (btnClearPreview) btnClearPreview.disabled = true;
+    syncPreviewActionButtons();
   }
 
   function snapshotState() {
@@ -116,8 +119,15 @@
       for (let c = 0; c < boardSize; c++) row.push(boardLetterAt(r, c) || '');
       board.push(row);
     }
+    const previewBoard = [];
+    for (let r = 0; r < boardSize; r++) {
+      const row = [];
+      for (let c = 0; c < boardSize; c++) row.push(previewLetterAt(r, c) || '');
+      previewBoard.push(row);
+    }
     return {
       board,
+      previewBoard,
       rackText: rackInput ? rackInput.value || '' : '',
     };
   }
@@ -130,26 +140,73 @@
       }
     }
     clearPreview();
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+        const ch = state?.previewBoard?.[r]?.[c] || '';
+        if (ch) preview[r][c] = { letter: ch };
+      }
+    }
     if (rackInput) rackInput.value = state?.rackText || '';
     setRackFromInput();
+    syncPreviewActionButtons();
     renderBoard();
   }
 
+  function hasPreviewLetters() {
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+        if (previewLetterAt(r, c)) return true;
+      }
+    }
+    return false;
+  }
+
   function saveToStorage() {
+    if (!hasAnyLetter() && !hasPreviewLetters()) {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY_BAK);
+      } catch (_) {}
+      return;
+    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotState()));
-    } catch (_) {}
+      const raw = JSON.stringify(snapshotState());
+      try {
+        localStorage.setItem(STORAGE_KEY_BAK, raw);
+      } catch (_) {
+        /* yedek yazılamazsa anahtar yine denenir */
+      }
+      localStorage.setItem(STORAGE_KEY, raw);
+    } catch (e) {
+      console.warn('kelimelik: tahta localStorage\'a yazılamadı', e);
+    }
+  }
+
+  function parseStoredState(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    try {
+      const state = JSON.parse(raw);
+      if (!state || !Array.isArray(state.board)) return null;
+      return state;
+    } catch (_) {
+      return null;
+    }
   }
 
   function loadFromStorage() {
+    let state = parseStoredState(localStorage.getItem(STORAGE_KEY));
+    if (!state) state = parseStoredState(localStorage.getItem(STORAGE_KEY_BAK));
+    if (!state) return false;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return false;
-      applyState(JSON.parse(raw));
+      applyState(state);
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  function flushBoardPersistence() {
+    saveToStorage();
   }
 
   function commitPreview() {
@@ -180,6 +237,134 @@
       }
     }
     return false;
+  }
+
+  function effectiveLetterAt(r, c) {
+    return boardLetterAt(r, c) || previewLetterAt(r, c);
+  }
+
+  /** Önizlemedeki yeni taşlar (tahtada olmayan kareler). */
+  function collectNewPreviewCells() {
+    const cells = [];
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+        if (boardLetterAt(r, c)) continue;
+        const ch = previewLetterAt(r, c);
+        if (ch) cells.push({ r, c, ch });
+      }
+    }
+    return cells;
+  }
+
+  /**
+   * Manuel önizlemeden ana hamle (tek satır veya tek sütun, bitişik) üretir.
+   * `findMoves` / `isMoveDictionaryValid` ile aynı kurallar.
+   */
+  function buildMoveFromPreview() {
+    const placed = collectNewPreviewCells();
+    if (placed.length === 0) return { ok: false, reason: 'Onaylanacak önizleme yok.' };
+
+    const sameRow = placed.every((t) => t.r === placed[0].r);
+    const sameCol = placed.every((t) => t.c === placed[0].c);
+    if (!sameRow && !sameCol) {
+      return { ok: false, reason: 'Yeni taşlar tek satır veya tek sütunda olmalı.' };
+    }
+
+    const dir = sameRow ? 'H' : 'V';
+    const fixed = sameRow ? placed[0].r : placed[0].c;
+    let min = sameRow ? Math.min(...placed.map((t) => t.c)) : Math.min(...placed.map((t) => t.r));
+    let max = sameRow ? Math.max(...placed.map((t) => t.c)) : Math.max(...placed.map((t) => t.r));
+
+    while (min > 0) {
+      const r = sameRow ? fixed : min - 1;
+      const c = sameRow ? min - 1 : fixed;
+      if (!effectiveLetterAt(r, c)) break;
+      min--;
+    }
+    while (max < boardSize - 1) {
+      const r = sameRow ? fixed : max + 1;
+      const c = sameRow ? max + 1 : fixed;
+      if (!effectiveLetterAt(r, c)) break;
+      max++;
+    }
+
+    let word = '';
+    for (let k = min; k <= max; k++) {
+      const r = sameRow ? fixed : k;
+      const c = sameRow ? k : fixed;
+      const ch = effectiveLetterAt(r, c);
+      if (!ch) {
+        return { ok: false, reason: 'Yerleşim aralıksız olmalı (arada boş kare yok).' };
+      }
+      word += ch;
+    }
+
+    if (word.length < 2) return { ok: false, reason: 'En az 2 harfli kelime olmalı.' };
+
+    const r0 = sameRow ? fixed : min;
+    const c0 = sameRow ? min : fixed;
+    const used = placed.length;
+    const move = { word, r: r0, c: c0, dir, used };
+
+    if (!hasAnyLetter()) {
+      const passesCenter =
+        (dir === 'H' && r0 === CENTER && c0 <= CENTER && CENTER < c0 + word.length) ||
+        (dir === 'V' && c0 === CENTER && r0 <= CENTER && CENTER < r0 + word.length);
+      if (!passesCenter) return { ok: false, reason: 'İlk hamle merkez hücreden geçmelidir.' };
+    }
+
+    if (blockedBySideLetters(word, r0, c0, dir)) {
+      return { ok: false, reason: 'Kelime aynı yönde bitişik harflerle zaten uzuyor (geçersiz).' };
+    }
+
+    if (hasAnyLetter() && !wordHasConnection(word, r0, c0, dir)) {
+      return { ok: false, reason: 'Hamle mevcut harflere temas etmelidir.' };
+    }
+
+    return { ok: true, move };
+  }
+
+  /** Yeni önizleme harfleri için raftan (ve joker) düşümü mümkün mü? */
+  function canConsumeRackForPreviewTiles() {
+    const counts = rackCountsFromText(rackInput ? rackInput.value : '');
+    const need = collectNewPreviewCells();
+    for (let i = 0; i < need.length; i++) {
+      const ch = need[i].ch;
+      const u = trUpper(ch);
+      let n = counts.get(u) || 0;
+      if (n > 0) {
+        counts.set(u, n - 1);
+        continue;
+      }
+      const jok = counts.get('?') || 0;
+      if (jok > 0) {
+        counts.set('?', jok - 1);
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  function consumeRackAfterSuccessfulCommit() {
+    const need = collectNewPreviewCells();
+    const counts = rackCountsFromText(rackInput ? rackInput.value : '');
+    for (let i = 0; i < need.length; i++) {
+      const u = trUpper(need[i].ch);
+      let n = counts.get(u) || 0;
+      if (n > 0) {
+        counts.set(u, n - 1);
+        continue;
+      }
+      const jok = counts.get('?') || 0;
+      if (jok > 0) counts.set('?', jok - 1);
+    }
+    const letters = [];
+    counts.forEach((n, ch) => {
+      for (let k = 0; k < n; k++) letters.push(ch);
+    });
+    if (rackInput) rackInput.value = letters.join('');
+    setRackFromInput();
   }
 
   /** Sözlük ve kelime karşılaştırması için Türkçe büyük harf (i→İ vb.) */
@@ -221,8 +406,8 @@
   }
 
   function ensureDictLoaderUI() {
-    if (!dictHint) return;
-    if (document.getElementById('dictFileInput')) return;
+    const host = document.querySelector('.moves-wrap');
+    if (!host || document.getElementById('dictFileInput')) return;
 
     const wrap = document.createElement('div');
     wrap.style.marginTop = '8px';
@@ -247,7 +432,6 @@
       const f = input.files?.[0];
       if (!f) return;
       try {
-        if (dictHint) dictHint.textContent = 'Sözlük okunuyor…';
         const text = await f.text();
         const raw = JSON.parse(text);
         if (!Array.isArray(raw)) throw new Error('Sözlük JSON array değil.');
@@ -255,21 +439,20 @@
         DICT_WORDS = words;
         DICT_INDEX = buildDictIndex(words);
         DICT_SET = buildDictSet(words);
-        if (dictHint) dictHint.textContent = `Sözlük hazır (${words.length.toLocaleString('tr-TR')} kelime).`;
+        setMessage('');
       } catch (e) {
         console.error(e);
-        if (dictHint) dictHint.textContent = `Sözlük yüklenemedi: ${e?.message || e}`;
+        setMessage(`Sözlük yüklenemedi: ${e?.message || e}`);
       }
     });
 
     wrap.appendChild(btn);
     wrap.appendChild(input);
-    dictHint.insertAdjacentElement('afterend', wrap);
+    host.appendChild(wrap);
   }
 
   async function loadDictionary() {
     if (DICT_WORDS) return true;
-    if (dictHint) dictHint.textContent = 'Sözlük yükleniyor…';
     try {
       // file:// altında fetch engellenebilir; başarısızsa file picker'a düşeceğiz
       const res = await fetch('kelimeler.json', { cache: 'no-store' });
@@ -280,11 +463,11 @@
       DICT_WORDS = words;
       DICT_INDEX = buildDictIndex(words);
       DICT_SET = buildDictSet(words);
-      if (dictHint) dictHint.textContent = `Sözlük hazır (${words.length.toLocaleString('tr-TR')} kelime).`;
+      setMessage('');
       return true;
     } catch (e) {
       console.warn('Sözlük fetch ile yüklenemedi, dosya seçimi gerekecek.', e);
-      if (dictHint) dictHint.textContent = 'Sözlük yüklenemedi. Aşağıdan kelimeler.json seç.';
+      setMessage('Sözlük yüklenemedi. Aşağıdan kelimeler.json seç.');
       ensureDictLoaderUI();
       return false;
     }
@@ -396,11 +579,7 @@
             const ch = String(data?.ch || '');
             if (!Number.isInteger(fromIdx) || !ch) return;
             placeLetterDirect(r, c, ch);
-            // idx >= 0 ise raftan geldi; idx -1 ise bankadan (kopya) geldi
-            if (fromIdx >= 0) {
-              rack.splice(fromIdx, 1);
-              renderRack();
-            }
+            // Raftan harf onayda düşer; banka kopyası olduğu için raftan düşmez
           } catch (_) {
             // ignore malformed drags
           }
@@ -415,10 +594,11 @@
   }
 
   function placeLetterDirect(r, c, ch) {
-    const letter = String(ch).toUpperCase();
+    const letter = trUpper(ch);
     if (!letter || letter.length !== 1) return;
-    committed[r][c] = { letter };
-    preview[r][c] = null;
+    if (boardLetterAt(r, c)) return;
+    preview[r][c] = { letter };
+    syncPreviewActionButtons();
     renderBoard();
     saveToStorage();
   }
@@ -426,6 +606,7 @@
   function clearCell(r, c) {
     committed[r][c] = null;
     preview[r][c] = null;
+    syncPreviewActionButtons();
     renderBoard();
     saveToStorage();
   }
@@ -438,11 +619,27 @@
   loadDictionary();
   loadFromStorage();
 
+  window.addEventListener('pagehide', flushBoardPersistence);
+  window.addEventListener('beforeunload', flushBoardPersistence);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushBoardPersistence();
+  });
+
+  setInterval(() => {
+    if (hasAnyLetter()) flushBoardPersistence();
+  }, 60000);
+
   if (btnClearBoard) {
     btnClearBoard.addEventListener('click', () => {
       for (let r = 0; r < boardSize; r++) {
-        for (let c = 0; c < boardSize; c++) committed[r][c] = null;
+        for (let c = 0; c < boardSize; c++) {
+          committed[r][c] = null;
+          preview[r][c] = null;
+        }
       }
+      selectedMove = null;
+      if (btnConfirmMove) btnConfirmMove.disabled = true;
+      if (btnClearPreview) btnClearPreview.disabled = true;
       renderBoard();
       setMessage('');
       if (movesList) movesList.innerHTML = '';
@@ -889,12 +1086,33 @@
 
   if (btnConfirmMove) {
     btnConfirmMove.addEventListener('click', () => {
+      const built = buildMoveFromPreview();
+      if (!built.ok) {
+        setMessage(built.reason);
+        return;
+      }
+      if (!DICT_SET) {
+        setMessage('Hamleyi doğrulamak için sözlük gerekli. Önce kelimeler.json yükleyin veya sayfayı yenileyin.');
+        return;
+      }
+      if (!isMoveDictionaryValid(built.move)) {
+        setMessage('Hamle geçersiz: ana veya oluşan kelimelerden biri sözlükte yok.');
+        return;
+      }
+      const rackStr = (rackInput?.value || '').trim();
+      if (rackStr && !canConsumeRackForPreviewTiles()) {
+        setMessage('Rafta bu önizleme için yeterli harf (veya ?) yok.');
+        return;
+      }
+
+      const pts = scoreMove(built.move);
       const any = commitPreview();
-      if (!any) setMessage('Onaylanacak önizleme yok.');
-      // Yeni tur için rack'i her durumda temizle (refresh gerektirmesin)
-      rack = [];
-      if (rackInput) rackInput.value = '';
-      setRackFromInput(); // renderRack() dahil
+      if (!any) {
+        setMessage('Onaylanacak önizleme yok.');
+        return;
+      }
+      if (rackStr) consumeRackAfterSuccessfulCommit();
+      setMessage(`Onaylandı. Toplam: ${pts} puan`);
       saveToStorage();
     });
   }
