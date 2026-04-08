@@ -29,6 +29,14 @@
   const displayLetter = api.displayLetter;
   const LETTER_VALUES = api.LETTER_VALUES || {};
   const PREMIUM = api.PREMIUM;
+  const STAR_BONUS_POINTS = api.STAR_BONUS_POINTS || { 1: 10, 3: 25 };
+  const starBonus = api.emptyStarBoard();
+
+  function resetStarBonus() {
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) starBonus[r][c] = 0;
+    }
+  }
 
   const boardElement = document.getElementById('board');
   const rackInput = document.getElementById('rackInput');
@@ -52,6 +60,38 @@
 
   const STORAGE_KEY = 'kelimelik-assistant-state-v1';
   const STORAGE_KEY_BAK = 'kelimelik-assistant-state-v1.bak';
+  /** Kullanıcı işaretlerse yeni oyun uyarısı bir daha gösterilmez */
+  const REMINDER_HIDE_KEY = 'kelimelik-hide-newgame-reminder';
+
+  function shouldShowNewGameReminder() {
+    return !localStorage.getItem(REMINDER_HIDE_KEY);
+  }
+
+  function showNewGameReminderIfNeeded() {
+    if (!shouldShowNewGameReminder()) return;
+    const d = document.getElementById('newGameDialog');
+    if (!d) return;
+    const cb = document.getElementById('newGameDontShow');
+    if (cb) cb.checked = false;
+    try {
+      if (typeof d.showModal === 'function') d.showModal();
+      else d.setAttribute('open', '');
+    } catch (_) {}
+  }
+
+  function wireNewGameDialog() {
+    const d = document.getElementById('newGameDialog');
+    const ok = document.getElementById('newGameDialogOk');
+    if (!d || !ok) return;
+    ok.addEventListener('click', () => {
+      const cb = document.getElementById('newGameDontShow');
+      if (cb?.checked) localStorage.setItem(REMINDER_HIDE_KEY, '1');
+      try {
+        if (typeof d.close === 'function') d.close();
+        else d.removeAttribute('open');
+      } catch (_) {}
+    });
+  }
 
   function setMessage(text) {
     if (messageEl) messageEl.textContent = text || '';
@@ -114,9 +154,18 @@
 
   function snapshotState() {
     const board = [];
+    const jokers = [];
     for (let r = 0; r < boardSize; r++) {
       const row = [];
-      for (let c = 0; c < boardSize; c++) row.push(boardLetterAt(r, c) || '');
+      for (let c = 0; c < boardSize; c++) {
+        const t = committed[r]?.[c];
+        if (t?.blank && t.jokerLetter) {
+          row.push('');
+          jokers.push({ r, c, letter: String(t.jokerLetter).toUpperCase() });
+        } else {
+          row.push(boardLetterAt(r, c) || '');
+        }
+      }
       board.push(row);
     }
     const previewBoard = [];
@@ -127,8 +176,10 @@
     }
     return {
       board,
+      jokers,
       previewBoard,
       rackText: rackInput ? rackInput.value || '' : '',
+      starBonus: starBonus.map((row) => row.slice()),
     };
   }
 
@@ -136,7 +187,17 @@
     for (let r = 0; r < boardSize; r++) {
       for (let c = 0; c < boardSize; c++) {
         const ch = state?.board?.[r]?.[c] || '';
-        committed[r][c] = ch ? { letter: ch } : null;
+        committed[r][c] = ch ? { letter: trUpper(ch) } : null;
+      }
+    }
+    if (Array.isArray(state?.jokers)) {
+      for (const j of state.jokers) {
+        const r = j?.r;
+        const c = j?.c;
+        const L = trUpper(j?.letter);
+        if (!Number.isFinite(r) || !Number.isFinite(c) || !L) continue;
+        if (r < 0 || r >= boardSize || c < 0 || c >= boardSize) continue;
+        committed[r][c] = { letter: L, blank: true, jokerLetter: L };
       }
     }
     clearPreview();
@@ -148,6 +209,16 @@
     }
     if (rackInput) rackInput.value = state?.rackText || '';
     setRackFromInput();
+    if (Array.isArray(state?.starBonus) && state.starBonus.length === boardSize) {
+      for (let r = 0; r < boardSize; r++) {
+        for (let c = 0; c < boardSize; c++) {
+          const v = state.starBonus[r]?.[c];
+          starBonus[r][c] = v === 1 || v === 3 ? v : 0;
+        }
+      }
+    } else {
+      resetStarBonus();
+    }
     syncPreviewActionButtons();
     renderBoard();
   }
@@ -161,8 +232,17 @@
     return false;
   }
 
+  function hasAnyStarMark() {
+    for (let r = 0; r < boardSize; r++) {
+      for (let c = 0; c < boardSize; c++) {
+        if (starBonus[r][c] > 0) return true;
+      }
+    }
+    return false;
+  }
+
   function saveToStorage() {
-    if (!hasAnyLetter() && !hasPreviewLetters()) {
+    if (!hasAnyLetter() && !hasPreviewLetters() && !hasAnyStarMark()) {
       try {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(STORAGE_KEY_BAK);
@@ -535,6 +615,40 @@
   }
 
 // Board'u render et
+  const PREMIUM_CLASS = {
+    1: 'cell-premium-h2',
+    2: 'cell-premium-h3',
+    3: 'cell-premium-k2',
+    4: 'cell-premium-k3',
+  };
+  const PREMIUM_LABEL = {
+    1: 'H²',
+    2: 'H³',
+    3: 'K²',
+    4: 'K³',
+  };
+
+  function cycleStarBonus(r, c) {
+    const cur = starBonus[r][c] || 0;
+    if (cur === 0) starBonus[r][c] = 1;
+    else if (cur === 1) starBonus[r][c] = 3;
+    else starBonus[r][c] = 0;
+    renderBoard();
+    saveToStorage();
+  }
+
+  function appendStarMarker(cell, r, c) {
+    const k = starBonus[r]?.[c] ?? 0;
+    if (!k) return;
+    const m = document.createElement('span');
+    m.className = k === 3 ? 'cell-star-mark cell-star-triple' : 'cell-star-mark cell-star-single';
+    m.textContent = k === 3 ? '★★★' : '★';
+    const pts = STAR_BONUS_POINTS[k];
+    m.title = `Yıldız bonusu (+${pts}). Bu karede sabit H²/H³/K²/K³ çarpanı uygulanmaz.`;
+    m.setAttribute('aria-hidden', 'true');
+    cell.appendChild(m);
+  }
+
   function renderBoard() {
     if (!boardElement) return;
     boardElement.innerHTML = '';
@@ -544,6 +658,12 @@
         cell.classList.add('cell');
         const centerIdx = Math.floor(boardSize / 2);
         if (r === centerIdx && c === centerIdx) cell.classList.add('cell-center');
+        const starK = starBonus[r]?.[c] ?? 0;
+        const rawP = PREMIUM?.[r]?.[c] ?? 0;
+        /** Yıldızlı karede Kelimelik’te sabit H/K çarpanı yok; yalnız yıldız bonusu geçerli */
+        const p = starK > 0 ? 0 : rawP;
+        if (p > 0 && PREMIUM_CLASS[p]) cell.classList.add(PREMIUM_CLASS[p]);
+        if (starK > 0) cell.classList.add('cell-star-bonus');
         cell.dataset.row = r;
         cell.dataset.col = c;
         const tile = committed[r][c];
@@ -556,10 +676,22 @@
           if (pv) {
             setCellLetterContent(cell, pv, faceValueForLetterChar(pv));
             cell.classList.add('preview', 'cell-has-letter');
-          } else {
-            cell.textContent = '';
+          } else if (p > 0) {
+            const lab = document.createElement('span');
+            lab.className = 'cell-premium-label';
+            lab.textContent = PREMIUM_LABEL[p];
+            lab.setAttribute('aria-hidden', 'true');
+            cell.appendChild(lab);
           }
         }
+        appendStarMarker(cell, r, c);
+
+        cell.addEventListener('click', (e) => {
+          if (!e.ctrlKey && !e.metaKey) return;
+          e.preventDefault();
+          cell.classList.remove('drag-over');
+          cycleStarBonus(r, c);
+        });
 
         // Drag & drop hedefi
         cell.addEventListener('dragover', (e) => {
@@ -617,7 +749,11 @@
   setRackFromInput();
   renderLetterBank();
   loadDictionary();
-  loadFromStorage();
+  const loadedFromStorage = loadFromStorage();
+  wireNewGameDialog();
+  if (!loadedFromStorage && !hasAnyLetter() && !hasPreviewLetters() && shouldShowNewGameReminder()) {
+    queueMicrotask(() => showNewGameReminderIfNeeded());
+  }
 
   window.addEventListener('pagehide', flushBoardPersistence);
   window.addEventListener('beforeunload', flushBoardPersistence);
@@ -629,6 +765,16 @@
     if (hasAnyLetter()) flushBoardPersistence();
   }, 60000);
 
+  const btnClearStars = document.getElementById('btnClearStars');
+  if (btnClearStars) {
+    btnClearStars.addEventListener('click', () => {
+      resetStarBonus();
+      renderBoard();
+      saveToStorage();
+      setMessage('Yıldız işaretleri temizlendi.');
+    });
+  }
+
   if (btnClearBoard) {
     btnClearBoard.addEventListener('click', () => {
       for (let r = 0; r < boardSize; r++) {
@@ -637,6 +783,7 @@
           preview[r][c] = null;
         }
       }
+      resetStarBonus();
       selectedMove = null;
       if (btnConfirmMove) btnConfirmMove.disabled = true;
       if (btnClearPreview) btnClearPreview.disabled = true;
@@ -644,6 +791,7 @@
       setMessage('');
       if (movesList) movesList.innerHTML = '';
       saveToStorage();
+      if (shouldShowNewGameReminder()) showNewGameReminderIfNeeded();
     });
   }
 
@@ -794,7 +942,8 @@
       const c = c0 + dc * i;
       let v = LETTER_VALUES[word[i]] || 0;
       if (newCells.has(`${r},${c}`)) {
-        const p = PREMIUM[r]?.[c] ?? 0;
+        const rawP = PREMIUM[r]?.[c] ?? 0;
+        const p = (starBonus[r]?.[c] ?? 0) > 0 ? 0 : rawP;
         if (p === 1) v *= 2;
         else if (p === 2) v *= 3;
         else if (p === 3) wordMult *= 2;
@@ -805,12 +954,26 @@
     return sum * wordMult;
   }
 
+  /** Kelime yolu üzerindeki manuel yıldız kareleri (Kelimelik’te rastgele; +puan kelimeye eklenir). */
+  function starPointsForWord(word, r0, c0, dr, dc) {
+    let pts = 0;
+    for (let i = 0; i < word.length; i++) {
+      const r = r0 + dr * i;
+      const c = c0 + dc * i;
+      const k = starBonus[r]?.[c] ?? 0;
+      if (k === 1 || k === 3) pts += STAR_BONUS_POINTS[k] ?? 0;
+    }
+    return pts;
+  }
+
   /** Ana kelime + oluşan çapraz kelimeler + 7 taş bonusu (50). */
   function scoreMove(move) {
     const newCells = newCellsForMove(move);
     const dr = move.dir === 'V' ? 1 : 0;
     const dc = move.dir === 'H' ? 1 : 0;
-    let total = scoreWordLine(move.word, move.r, move.c, dr, dc, newCells);
+    let total =
+      scoreWordLine(move.word, move.r, move.c, dr, dc, newCells) +
+      starPointsForWord(move.word, move.r, move.c, dr, dc);
     const crossDir = move.dir === 'H' ? 'V' : 'H';
     const dr2 = crossDir === 'V' ? 1 : 0;
     const dc2 = crossDir === 'H' ? 1 : 0;
@@ -834,7 +997,8 @@
       const ck = `${crossDir}:${r0},${c0}`;
       if (seenCross.has(ck)) continue;
       seenCross.add(ck);
-      total += scoreWordLine(cw, r0, c0, dr2, dc2, newCells);
+      total +=
+        scoreWordLine(cw, r0, c0, dr2, dc2, newCells) + starPointsForWord(cw, r0, c0, dr2, dc2);
     }
     if (move.used === 7) total += 50;
     return total;
@@ -1116,5 +1280,17 @@
       saveToStorage();
     });
   }
+
+  /** Konsoldan veya dışarıdan: `kelimelikLoadScenario({ board, jokers?, previewBoard?, rackText })` */
+  window.kelimelikLoadScenario = function loadScenario(state) {
+    try {
+      const s = typeof state === 'string' ? JSON.parse(state) : state;
+      applyState(s);
+      setMessage('Sahne yüklendi.');
+      saveToStorage();
+    } catch (e) {
+      setMessage(`Sahne yüklenemedi: ${e?.message || e}`);
+    }
+  };
 
 })();

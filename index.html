@@ -27,6 +27,9 @@
           <button type="button" id="btnClearPreview" class="btn-toolbar" disabled>Önizlemeyi temizle</button>
           <button type="button" id="btnSolve" class="btn-toolbar">Olası hamleleri bul</button>
           <button type="button" id="btnClearBoard" class="btn-toolbar">Tahtayı temizle</button>
+          <button type="button" id="btnClearStars" class="btn-toolbar" title="Ctrl+tık ile işaretlediğiniz 1★ / 3★ bonus karelerini sıfırlar">
+            Yıldız işaretlerini temizle
+          </button>
           <button type="button" id="btnClearRack" class="btn-toolbar">Raftaki harfleri temizle</button>
         </div>
       </aside>
@@ -40,7 +43,7 @@
 
       <div class="board-wrap">
         <div id="board" class="board" aria-label="Tahta"></div>
-        <p class="fine-print">Harfleri raf veya paletten sürükleyip tahtaya bırakın. Dolu kareyi silmek için çift tıklayın.</p>
+        <p class="fine-print">Harfleri raf veya paletten sürükleyip tahtaya bırakın. Dolu kareyi silmek için çift tıklayın. Oyundaki rastgele yıldız kareleri: <strong>Ctrl+tık</strong> ile yok → 1★ → 3★; puan kelimeye eklenir. Yıldızlı karede alttaki H²/H³/K²/K³ çarpanı uygulanmaz (sadece yıldız puanı).</p>
       </div>
 
       <section class="panel solver-panel">
@@ -60,6 +63,28 @@
       </div>
     </div>
   </div>
+
+  <dialog id="newGameDialog" class="new-game-dialog" aria-labelledby="newGameDialogTitle">
+    <div class="new-game-dialog-inner">
+      <h2 id="newGameDialogTitle">Yeni oyunda doğru hamle ve puan için</h2>
+      <p class="new-game-lead">Her yeni oyunda (boş tahta) bir kez hatırlatılır; oyunu ve puanı doğru kurmak için önemli.</p>
+      <ul class="new-game-list">
+        <li><strong>Bonus kareler:</strong> Tahtada <strong>H² / H³</strong> (harf çarpanı), <strong>K² / K³</strong> (kelime çarpanı) konumları puanda çok etkiler — boş karelerde etiketleri görürsünüz.</li>
+        <li><strong>İlk hamle:</strong> İlk kelime <strong>merkez kareden</strong> geçmeli (yıldız / orta).</li>
+        <li><strong>Hamle şekli:</strong> Bir turda yeni taşlar <strong>tek satır veya tek sütunda</strong>, <strong>bitişik</strong> olmalı; onayda ana ve çapraz kelimeler <strong>sözlükte</strong> olmalı.</li>
+        <li><strong>Sözlük:</strong> <code>kelimeler.json</code> yüklü olsun; öneriler ve onay buna bağlı.</li>
+        <li><strong>Önizleme → onay:</strong> Harfleri yerleştirip <strong>Seçili öneriyi onayla</strong> ile işleyin; puan hesabı bonuslarla uyumludur.</li>
+        <li><strong>Rastgele yıldız kareleri:</strong> 1★ / 3★ kareleri <strong>Ctrl+tık</strong> ile işaretleyin; puana yıldız eklenir, o karede sabit H²/H³/K²/K³ çarpanı uygulanmaz.</li>
+      </ul>
+      <label class="new-game-optout">
+        <input type="checkbox" id="newGameDontShow" />
+        Sonraki yeni oyunlarda bu pencereyi gösterme
+      </label>
+      <div class="new-game-actions">
+        <button type="button" id="newGameDialogOk" class="btn-toolbar">Tamam, devam</button>
+      </div>
+    </div>
+  </dialog>
 
   <script src="solver_rules.js"></script>
   <script src="main.js"></script>
