@@ -1,5 +1,5 @@
 (() => {
-  /** Yerel önizleme düğmesi; `scripts/preview-local.ps1` ile aynı port */
+  /** Yerel önizleme; `npm run start` (serve) ile aynı varsayılan port */
   const LOCAL_PREVIEW_PORT = 5500;
 
   const btnLocalPreview = document.getElementById('btnLocalPreview');
